@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 
@@ -18,6 +19,16 @@ EMAIL_COL = "Email"
 NICKNAME_COL = "暱稱"
 CONTACT_COL = "聯絡方式"
 WANT_PREFIX = "想學_"
+STAFF_INTEREST_COLUMNS = [
+    "您對下列哪些項目已經有了解或經驗呢?（複選）",
+    "下列哪些項目是您還沒有接觸過，但想了解或學習的呢?\n（複選）",
+    "下列哪些項目是您還沒有接觸過，但想了解或學習的呢?（複選）",
+]
+PARTICIPANTS_INTEREST_COLUMNS = [
+    "您對下列哪些項目已經有一些了解或經驗呢？",
+    "下列哪些項目是您還沒有接觸過，但想了解或學習的呢？",
+    "請問您期待能在 SITCON 2026 聽到什麼主題的議程？",
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +75,15 @@ def make_interest_column_mapping(area_mapping_path: Path) -> dict[str, str]:
     }
 
 
+def make_area_text_mapping(area_mapping_path: Path) -> dict[str, str]:
+    area_mapping = json.loads(area_mapping_path.read_text(encoding="utf-8"))
+    text_mapping: dict[str, str] = {}
+    for en_name, zh_name in area_mapping.items():
+        text_mapping[str(en_name).strip()] = str(zh_name).strip()
+        text_mapping[str(zh_name).strip()] = str(zh_name).strip()
+    return text_mapping
+
+
 def is_truthy_flag(value: object) -> bool:
     if value is None:
         return False
@@ -82,12 +102,159 @@ def get_interested_area(member: pd.Series, want_col_to_zh: dict[str, str]) -> st
     return "、".join(areas)
 
 
+def split_participant_interest_items(value: object) -> list[str]:
+    if value is None:
+        return []
+    raw = str(value).strip()
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    except json.JSONDecodeError:
+        pass
+    return [token.strip() for token in raw.replace("，", ",").split(",") if token.strip()]
+
+
+def split_staff_interest_items(value: object) -> list[str]:
+    if value is None:
+        return []
+    raw = str(value).strip()
+    if not raw:
+        return []
+    normalized = raw.replace("，", ",").replace("\n", ",")
+    return [token.strip() for token in normalized.split(",") if token.strip()]
+
+
+def map_interest_tokens(tokens: list[str], area_text_mapping: dict[str, str]) -> list[str]:
+    areas: list[str] = []
+    for token in tokens:
+        normalized = token.strip()
+        if not normalized:
+            continue
+        if normalized.casefold() in {"none", "other"}:
+            continue
+        zh_name = area_text_mapping.get(normalized)
+        if zh_name and zh_name not in areas:
+            areas.append(zh_name)
+    return areas
+
+
+def collect_interested_area_from_row(
+    row: pd.Series,
+    columns: list[str],
+    parser: Callable[[object], list[str]],
+    area_text_mapping: dict[str, str],
+) -> str:
+    areas: list[str] = []
+    for col in columns:
+        for zh_name in map_interest_tokens(parser(row.get(col, "")), area_text_mapping):
+            if zh_name not in areas:
+                areas.append(zh_name)
+    return "、".join(areas)
+
+
+def build_interest_lookup(
+    staff_data_path: Path,
+    participants_data_path: Path,
+    area_text_mapping: dict[str, str],
+) -> dict[str, str]:
+    staff_df = pd.read_csv(staff_data_path, dtype=str, keep_default_na=False)
+    participants_df = pd.read_csv(participants_data_path, dtype=str, keep_default_na=False)
+
+    staff_email_col = find_col_by_candidates_or_keyword(
+        staff_df,
+        candidates=["聯絡用 email", "電子郵件地址", "Email"],
+        keyword="email",
+        file_label=str(staff_data_path),
+        field_label="staff email",
+    )
+    participants_email_col = find_col_by_candidates_or_keyword(
+        participants_df,
+        candidates=["Email", "電子郵件地址", "聯絡用 email"],
+        keyword="Email",
+        file_label=str(participants_data_path),
+        field_label="participants email",
+    )
+
+    participants_interest_cols = [
+        find_col_by_candidates_or_keyword(
+            participants_df,
+            candidates=[PARTICIPANTS_INTEREST_COLUMNS[0]],
+            keyword="已經有一些了解或經驗",
+            file_label=str(participants_data_path),
+            field_label="participants interested area",
+        ),
+        find_col_by_candidates_or_keyword(
+            participants_df,
+            candidates=[PARTICIPANTS_INTEREST_COLUMNS[1]],
+            keyword="想了解或學習",
+            file_label=str(participants_data_path),
+            field_label="participants interested area",
+        ),
+        find_col_by_candidates_or_keyword(
+            participants_df,
+            candidates=[PARTICIPANTS_INTEREST_COLUMNS[2]],
+            keyword="聽到什麼主題的議程",
+            file_label=str(participants_data_path),
+            field_label="participants interested area",
+        ),
+    ]
+    staff_interest_cols = [
+        find_col_by_candidates_or_keyword(
+            staff_df,
+            candidates=[STAFF_INTEREST_COLUMNS[0]],
+            keyword="已經有了解或經驗",
+            file_label=str(staff_data_path),
+            field_label="staff interested area",
+        ),
+        find_col_by_candidates_or_keyword(
+            staff_df,
+            candidates=STAFF_INTEREST_COLUMNS[1:],
+            keyword="想了解或學習",
+            file_label=str(staff_data_path),
+            field_label="staff interested area",
+        ),
+    ]
+
+    lookup: dict[str, str] = {}
+    for _, row in participants_df.iterrows():
+        email = str(row.get(participants_email_col, "")).strip()
+        if not email:
+            continue
+        interested_area = collect_interested_area_from_row(
+            row,
+            participants_interest_cols,
+            split_participant_interest_items,
+            area_text_mapping,
+        )
+        if interested_area:
+            lookup[email.casefold()] = interested_area
+
+    for _, row in staff_df.iterrows():
+        email = str(row.get(staff_email_col, "")).strip()
+        if not email:
+            continue
+        interested_area = collect_interested_area_from_row(
+            row,
+            staff_interest_cols,
+            split_staff_interest_items,
+            area_text_mapping,
+        )
+        if interested_area:
+            lookup[email.casefold()] = interested_area
+
+    return lookup
+
+
 def build_member_block(
     member: pd.Series,
     number: int,
     template: str,
     want_col_to_zh: dict[str, str],
     intro_lookup: dict[str, str],
+    interest_lookup: dict[str, str],
 ) -> str:
     email = str(member.get(EMAIL_COL, "")).strip()
     email_key = email.casefold()
@@ -101,7 +268,9 @@ def build_member_block(
         number=number,
         nickname=str(member.get(NICKNAME_COL, "")).strip(),
         self_introduction=intro_lookup.get(email_key, ""),
-        interested_area=get_interested_area(member, want_col_to_zh),
+        interested_area=interest_lookup.get(
+            email_key, get_interested_area(member, want_col_to_zh)
+        ),
         contact=contact,
     )
 
@@ -112,13 +281,19 @@ def build_members_string(
     template: str,
     want_col_to_zh: dict[str, str],
     intro_lookup: dict[str, str],
+    interest_lookup: dict[str, str],
 ) -> str:
     teammates = group_df.loc[group_df.index != target_index]
     blocks: list[str] = []
 
     for number, (_, teammate) in enumerate(teammates.iterrows(), start=1):
         block = build_member_block(
-            teammate, number, template, want_col_to_zh, intro_lookup
+            teammate,
+            number,
+            template,
+            want_col_to_zh,
+            intro_lookup,
+            interest_lookup,
         ).strip("\n")
         blocks.append(block)
 
@@ -197,7 +372,11 @@ def main() -> None:
 
     template = args.template.read_text(encoding="utf-8")
     want_col_to_zh = make_interest_column_mapping(args.area_mapping)
+    area_text_mapping = make_area_text_mapping(args.area_mapping)
     intro_lookup = build_intro_lookup(args.staff_data, args.participants_data)
+    interest_lookup = build_interest_lookup(
+        args.staff_data, args.participants_data, area_text_mapping
+    )
 
     rows: list[dict[str, str]] = []
     for _, group_df in df.groupby(GROUP_COL, sort=False):
@@ -208,6 +387,7 @@ def main() -> None:
                 template=template,
                 want_col_to_zh=want_col_to_zh,
                 intro_lookup=intro_lookup,
+                interest_lookup=interest_lookup,
             )
             rows.append(
                 {
