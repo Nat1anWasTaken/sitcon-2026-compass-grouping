@@ -47,34 +47,3 @@ uv run python preprocess_workers.py # 得到 output/1/workers.xlsx
 ```shell
 uv run python merge_and_group.py # 得到 output/SITCON_2026_Compass_Groups.xlsx
 ```
-
----
-
-## CSV 欄位標準化腳本（OpenAI / OpenRouter）
-
-### 1. 安裝套件
-
-```shell
-uv sync
-```
-
-### 2. 使用 OpenAI 執行
-
-```shell
-export OPENAI_API_KEY="your_api_key"
-uv run python normalize_submission_columns.py
-```
-
-### 3. 使用 OpenRouter 執行
-
-```shell
-export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
-export OPENAI_API_KEY="sk-or-..."
-export OPENAI_MODEL="openai/gpt-4.1-mini"
-uv run python normalize_submission_columns.py
-```
-
-### 4. 輸出檔案
-
-- `submissions.standardized.csv`
-- `standardized_names.json`
