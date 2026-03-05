@@ -1,6 +1,5 @@
 <strong>組員 {number}</strong>
-暱稱：
-{nickname}
+暱稱：{nickname}
 
 自我介紹：
 {self_introduction}
@@ -9,5 +8,4 @@
 {interested_area}
 
 聯絡資訊：
-Email：{email}
-其他：{other_contacts}
+{contact}

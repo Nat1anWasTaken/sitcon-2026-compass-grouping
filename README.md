@@ -4,7 +4,7 @@
 
 ## 開發環境
 
-- Python 3.10+
+- Python 3.12+
 - uv
 
 ---
@@ -12,8 +12,8 @@
 ## 架構介紹
 
 ```shell
-# |- input (放 會眾/工人資料)
-# |- output (放配對結果)
+# |- input/ (放 會眾/工人資料)
+# |- output/ (放配對結果)
 # |- const.py 常數
 # |- normalize_submission_columns.py 標準化會眾報名資料欄位（LLM 輔助）
 # |- normalize_staff_submission_columns.py 標準化工人報名資料欄位（LLM 輔助）
@@ -34,6 +34,7 @@
 
 ```shell
 uv sync
+mkdir -p input output/1
 ```
 
 ### 3. (選用) 執行欄位標準化腳本 (LLM 輔助)
@@ -44,7 +45,7 @@ uv sync
    ```env
    OPENAI_BASE_URL="你的 API Base URL" # 若使用 OpenAI 官方 API 可省略
    OPENAI_API_KEY="你的 API Key"
-   OPENAI_MODEL="gpt-4o-mini"
+   OPENAI_MODEL="gpt-4.1-mini"
    ```
 
 2. 將原始 CSV 報名資料放置於專案根目錄：
@@ -63,7 +64,7 @@ uv sync
    > - 處理過的結果會存在 json 中（`standardized_names.json` / `staff_standardized_names.json`），具有斷點續傳特性，重新執行將沿用先前的標準化結果，不需重複消耗 Token。
    > - 處理完成後，可再將 `*.standardized.csv` 自行整理匯出為 `input/attendees.xlsx` 與 `input/workers.xlsx` 以進行後續步驟。
 
-### 4. 執行 Preprocess 會眾/工人/講者 資料
+### 4. 執行 Preprocess 會眾/工人資料
 
 這邊主要是讓兩張表格式統一、生成指標與進行 One-hot encoding 好讓後續配對
 
@@ -84,11 +85,17 @@ uv run python merge_and_group.py # 得到 output/SITCON_2026_Compass_Groups.xlsx
 
 1. 準備輸入檔案（放在專案根目錄）：
    - 配對結果：`merged-result.csv`（需包含至少 `組別`、`Email`、`暱稱` 欄位）
+     - 可由 `output/SITCON_2026_Compass_Groups.xlsx` 另存成 CSV 後取得
+   - 工人原始資料：`staff-data.csv`
+   - 會眾原始資料：`participants-data.csv`
+   - 興趣欄位對應：`area-mapping.json`
    - 組員文字模板：`members-template.txt`
 
 2. 執行腳本：
    ```shell
    uv run python generate_mail_merge_csv.py
+   # 可選參數：
+   # --input --template --output --staff-data --participants-data --area-mapping
    ```
 
 3. 產出檔案：
@@ -101,4 +108,7 @@ uv run python merge_and_group.py # 得到 output/SITCON_2026_Compass_Groups.xlsx
 
 > **注意**：
 > - `members_string` 會排除收件者本人，只列出同組其他組員。
-> - 目前 `self_introduction` 會留白（`merged-result.csv` 不含完整自我介紹欄位）。
+> - 每位組員區塊之間固定保留一個空白行。
+> - `self_introduction` 會依 Email 從 `staff-data.csv` / `participants-data.csv` 查找。
+> - 若在兩份來源檔都找不到對應 Email，`self_introduction` 會留白。
+> - `有興趣的領域` 會從該成員所有 `想學_*` 欄位中挑出值不為 `0` 的欄位，再依 `area-mapping.json` 轉為顯示名稱。
