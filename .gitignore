@@ -1,3 +1,5 @@
 input
 output
 .idea
+__pycache__
+.env
