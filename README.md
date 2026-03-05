@@ -20,6 +20,7 @@
 # |- preprocess_attendees.py 預處理會眾資料
 # |- preprocess_workers.py 預處理工人資料
 # |- merge_and_group.py 配對腳本
+# |- generate_mail_merge_csv.py 產生 Mail Merge 用 CSV
 ```
 
 ## 使用方法
@@ -76,3 +77,28 @@ uv run python preprocess_workers.py # 得到 output/1/workers.xlsx
 ```shell
 uv run python merge_and_group.py # 得到 output/SITCON_2026_Compass_Groups.xlsx
 ```
+
+### 6. 產生 Mail Merge 用 CSV
+
+若要針對 `merged-result.csv` 中的每位成員寄送信件（內容包含同組組員資訊），可使用以下腳本：
+
+1. 準備輸入檔案（放在專案根目錄）：
+   - 配對結果：`merged-result.csv`（需包含至少 `組別`、`Email`、`暱稱` 欄位）
+   - 組員文字模板：`members-template.txt`
+
+2. 執行腳本：
+   ```shell
+   uv run python generate_mail_merge_csv.py
+   ```
+
+3. 產出檔案：
+   - `mail-merge.csv`
+   - 欄位包含：
+     - `receipt`：收件者 Email（來源 `Email`）
+     - `recipient_name`：收件者名稱（來源 `暱稱`）
+     - `group`：組別（來源 `組別`）
+     - `members_string`：同組其他組員資訊（依 `members-template.txt` 組合）
+
+> **注意**：
+> - `members_string` 會排除收件者本人，只列出同組其他組員。
+> - 目前 `self_introduction` 會留白（`merged-result.csv` 不含完整自我介紹欄位）。

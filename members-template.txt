@@ -1,0 +1,13 @@
+<strong>組員 {number}</strong>
+暱稱：
+{nickname}
+
+自我介紹：
+{self_introduction}
+
+有興趣的領域：
+{interested_area}
+
+聯絡資訊：
+Email：{email}
+其他：{other_contacts}
