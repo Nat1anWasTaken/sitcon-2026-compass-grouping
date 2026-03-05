@@ -35,14 +35,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Generate mail-merge CSV from merged-result.csv with columns: "
-            "receipt, recipient_name, members_string"
+            "recipient, recipient_name, members_string"
         )
     )
     parser.add_argument("--input", type=Path, default=INPUT_CSV_PATH)
     parser.add_argument("--template", type=Path, default=TEMPLATE_PATH)
     parser.add_argument("--output", type=Path, default=OUTPUT_CSV_PATH)
     parser.add_argument("--staff-data", type=Path, default=STAFF_DATA_PATH)
-    parser.add_argument("--participants-data", type=Path, default=PARTICIPANTS_DATA_PATH)
+    parser.add_argument(
+        "--participants-data", type=Path, default=PARTICIPANTS_DATA_PATH
+    )
     parser.add_argument("--area-mapping", type=Path, default=AREA_MAPPING_PATH)
     return parser.parse_args()
 
@@ -114,7 +116,9 @@ def split_participant_interest_items(value: object) -> list[str]:
             return [str(item).strip() for item in parsed if str(item).strip()]
     except json.JSONDecodeError:
         pass
-    return [token.strip() for token in raw.replace("，", ",").split(",") if token.strip()]
+    return [
+        token.strip() for token in raw.replace("，", ",").split(",") if token.strip()
+    ]
 
 
 def split_staff_interest_items(value: object) -> list[str]:
@@ -127,7 +131,9 @@ def split_staff_interest_items(value: object) -> list[str]:
     return [token.strip() for token in normalized.split(",") if token.strip()]
 
 
-def map_interest_tokens(tokens: list[str], area_text_mapping: dict[str, str]) -> list[str]:
+def map_interest_tokens(
+    tokens: list[str], area_text_mapping: dict[str, str]
+) -> list[str]:
     areas: list[str] = []
     for token in tokens:
         normalized = token.strip()
@@ -161,7 +167,9 @@ def build_interest_lookup(
     area_text_mapping: dict[str, str],
 ) -> dict[str, str]:
     staff_df = pd.read_csv(staff_data_path, dtype=str, keep_default_na=False)
-    participants_df = pd.read_csv(participants_data_path, dtype=str, keep_default_na=False)
+    participants_df = pd.read_csv(
+        participants_data_path, dtype=str, keep_default_na=False
+    )
 
     staff_email_col = find_col_by_candidates_or_keyword(
         staff_df,
@@ -301,9 +309,13 @@ def build_members_string(
     return "\n\n".join(blocks)
 
 
-def build_intro_lookup(staff_data_path: Path, participants_data_path: Path) -> dict[str, str]:
+def build_intro_lookup(
+    staff_data_path: Path, participants_data_path: Path
+) -> dict[str, str]:
     staff_df = pd.read_csv(staff_data_path, dtype=str, keep_default_na=False)
-    participants_df = pd.read_csv(participants_data_path, dtype=str, keep_default_na=False)
+    participants_df = pd.read_csv(
+        participants_data_path, dtype=str, keep_default_na=False
+    )
 
     staff_email_col = find_col_by_candidates_or_keyword(
         staff_df,
@@ -360,7 +372,9 @@ def main() -> None:
     if not args.staff_data.exists():
         raise FileNotFoundError(f"Staff data CSV not found: {args.staff_data}")
     if not args.participants_data.exists():
-        raise FileNotFoundError(f"Participants data CSV not found: {args.participants_data}")
+        raise FileNotFoundError(
+            f"Participants data CSV not found: {args.participants_data}"
+        )
     if not args.area_mapping.exists():
         raise FileNotFoundError(f"Area mapping JSON not found: {args.area_mapping}")
 
@@ -391,7 +405,7 @@ def main() -> None:
             )
             rows.append(
                 {
-                    "receipt": str(member.get(EMAIL_COL, "")).strip(),
+                    "receipent": str(member.get(EMAIL_COL, "")).strip(),
                     "recipient_name": str(member.get(NICKNAME_COL, "")).strip(),
                     "group": str(member.get(GROUP_COL, "")).strip(),
                     "members_string": members_string,
